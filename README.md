@@ -1,44 +1,44 @@
 # linkedin-fetch
 
-A [Claude Code](https://claude.ai/code) skill that fetches posts from a LinkedIn company page via [Apify](https://apify.com/) and saves them as structured JSON.
+Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una pagina aziendale LinkedIn tramite [Apify](https://apify.com/) e li salva in formato JSON strutturato.
 
-## Features
+## Funzionalità
 
-- Fetch posts by company URL or slug
-- Filter by date range or limit to the latest N posts
-- Configurable timeout for Apify scraping runs
-- Automatic dependency checks and clear error messages
-- Output saved as timestamped JSON with full post text and engagement metrics
+- Recupera i post dato l'URL o lo slug dell'azienda
+- Filtra per intervallo di date o limita agli ultimi N post
+- Timeout configurabile per l'esecuzione dello scraping su Apify
+- Controllo automatico delle dipendenze e messaggi di errore chiari
+- Output salvato come JSON con timestamp, testo completo e metriche di engagement
 
-## Prerequisites
+## Prerequisiti
 
 - Python 3.8+
-- An [Apify API token](https://console.apify.com/account/integrations)
+- Un [token API Apify](https://console.apify.com/account/integrations)
 
-## Installation
+## Installazione
 
-1. Clone or copy this skill into your Claude Code skills directory:
+1. Clona o copia questa skill nella tua directory di skill di Claude Code:
    ```bash
    git clone https://github.com/giuseppebisemi/linkedin-fetch.git
    ```
 
-2. Install Python dependencies:
+2. Installa le dipendenze Python:
    ```bash
    pip install -r scripts/requirements.txt
    ```
 
-3. Configure your Apify token:
+3. Configura il tuo token Apify:
    ```bash
-   export APIFY_API_TOKEN="your_token_here"
+   export APIFY_API_TOKEN="il_tuo_token"
    ```
-   Or create a `scripts/.env` file:
+   Oppure crea un file `scripts/.env`:
    ```
-   APIFY_API_TOKEN=your_token_here
+   APIFY_API_TOKEN=il_tuo_token
    ```
 
-## Usage
+## Utilizzo
 
-### Latest N posts
+### Ultimi N post
 
 ```bash
 python3 scripts/fetch_posts.py \
@@ -48,7 +48,7 @@ python3 scripts/fetch_posts.py \
   --max-posts 10
 ```
 
-### Date range
+### Intervallo di date
 
 ```bash
 python3 scripts/fetch_posts.py \
@@ -57,41 +57,41 @@ python3 scripts/fetch_posts.py \
   --to 2026-04-30
 ```
 
-## Options
+## Opzioni
 
-| Flag | Description |
+| Flag | Descrizione |
 |------|-------------|
-| `--company URL\|SLUG` | LinkedIn company URL or slug (required) |
-| `--from YYYY-MM-DD` | Start date (inclusive) |
-| `--to YYYY-MM-DD` | End date (inclusive) |
-| `--max-posts N` | Maximum posts to fetch (default: 0 = all) |
-| `--timeout SEC` | Apify run timeout in seconds (default: 300) |
-| `--output FILE` | Custom output JSON path |
+| `--company URL\|SLUG` | URL o slug della pagina LinkedIn (obbligatorio) |
+| `--from YYYY-MM-DD` | Data inizio (inclusa) |
+| `--to YYYY-MM-DD` | Data fine (inclusa) |
+| `--max-posts N` | Numero massimo di post da recuperare (default: 0 = tutti) |
+| `--timeout SEC` | Timeout di attesa per il run Apify in secondi (default: 300) |
+| `--output FILE` | Percorso personalizzato per il file JSON di output |
 
-## Project Structure
+## Struttura del progetto
 
 ```
 linkedin-fetch/
-├── SKILL.md                  # Claude Code skill instructions
-├── README.md                 # This file
-├── .gitignore                # Excludes secrets and generated outputs
+├── SKILL.md                  # Istruzioni della skill per Claude Code
+├── README.md                 # Questo file
+├── .gitignore                # Esclude secret e output generati
 ├── scripts/
-│   ├── fetch_posts.py        # Main script
-│   ├── requirements.txt      # Python dependencies
-│   └── .env.example          # Environment variable template
+│   ├── fetch_posts.py        # Script principale
+│   ├── requirements.txt      # Dipendenze Python
+│   └── .env.example          # Template delle variabili d'ambiente
 └── references/
-    └── apify-actor.md        # Apify actor API reference
+    └── apify-actor.md        # Riferimento API dell'actor Apify
 ```
 
-## Troubleshooting
+## Risoluzione dei problemi
 
-| Error | Solution |
-|-------|----------|
-| Missing dependency | Run `pip install -r scripts/requirements.txt` |
-| APIFY_API_TOKEN not found | Export the token or add it to `scripts/.env` |
-| 401 from Apify | Check that your token is valid and not expired |
-| Run timed out | Increase `--timeout` or check Apify console logs |
+| Errore | Soluzione |
+|--------|-----------|
+| Dipendenza mancante | Esegui `pip install -r scripts/requirements.txt` |
+| APIFY_API_TOKEN non trovato | Esporta il token o aggiungilo a `scripts/.env` |
+| 401 da Apify | Verifica che il token sia valido e non scaduto |
+| Timeout del run | Aumenta `--timeout` o controlla i log su console Apify |
 
-## License
+## Licenza
 
 MIT
