@@ -76,6 +76,7 @@ Parametri principali dello script:
 | `--max-posts N` | Numero massimo di post da recuperare (default: 0 = tutti) |
 | `--output FILE` | File JSON di output personalizzato |
 | `--timeout SEC` | Timeout massimo di attesa per il run Apify (default: 300 secondi) |
+| `--download-media` | Scarica anche immagini, video e PDF allegati ai post |
 
 **Nota sul tempo di esecuzione:** Il run Apify può richiedere da 30 secondi a diversi minuti. Durante l'attesa, lo script stampa un punto ogni 10 secondi. Informa l'utente che stai aspettando, soprattutto se il run sembra bloccarsi.
 

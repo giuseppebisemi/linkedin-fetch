@@ -22,6 +22,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -220,6 +221,81 @@ def save_json(posts: list[dict], slug: str) -> Path:
     return path
 
 
+# ── media download ────────────────────────────────────────────────────────────
+
+def _ext_from_url(url: str) -> str:
+    path = urlparse(url).path
+    ext = Path(path).suffix
+    if ext:
+        return ext
+    lower = url.lower()
+    if "mp4" in lower or "/vid/" in lower:
+        return ".mp4"
+    if "pdf" in lower:
+        return ".pdf"
+    if "image" in lower or "thumbnail" in lower or "cover" in lower:
+        return ".jpg"
+    return ".bin"
+
+
+def _download_file(url: str, dest: Path) -> bool:
+    try:
+        resp = requests.get(url, timeout=60)
+        if resp.status_code == 200:
+            dest.write_bytes(resp.content)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def download_media(posts: list[dict], slug: str) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    media_dir = Path.cwd() / f"linkedin_posts_{slug}_{ts}_media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+
+    for post in posts:
+        post_id = str(post.get("id", "unknown"))
+        post_dir = media_dir / post_id
+        post_dir.mkdir(exist_ok=True)
+
+        images = post.get("postImages") or []
+        if images:
+            img_dir = post_dir / "images"
+            img_dir.mkdir(exist_ok=True)
+            for idx, url in enumerate(images, 1):
+                ext = _ext_from_url(url) or ".jpg"
+                _download_file(url, img_dir / f"image_{idx:03d}{ext}")
+
+        video = post.get("postVideo") or {}
+        video_url = video.get("videoUrl")
+        thumb_url = video.get("thumbnailUrl")
+        if video_url or thumb_url:
+            vid_dir = post_dir / "video"
+            vid_dir.mkdir(exist_ok=True)
+            if thumb_url:
+                ext = _ext_from_url(thumb_url) or ".jpg"
+                _download_file(thumb_url, vid_dir / f"thumbnail{ext}")
+            if video_url:
+                ext = _ext_from_url(video_url) or ".mp4"
+                _download_file(video_url, vid_dir / f"video{ext}")
+
+        doc = post.get("document") or {}
+        doc_url = doc.get("transcribedDocumentUrl")
+        if doc_url:
+            _download_file(doc_url, post_dir / "document.pdf")
+        covers = doc.get("coverPages") or [] if doc else []
+        if covers:
+            cov_dir = post_dir / "covers"
+            cov_dir.mkdir(exist_ok=True)
+            for page_idx, page in enumerate(covers, 1):
+                for img_idx, url in enumerate(page.get("imageUrls", []), 1):
+                    ext = _ext_from_url(url) or ".jpg"
+                    _download_file(url, cov_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
+
+    return media_dir
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def resolve_company(raw: str) -> tuple[str, str]:
@@ -275,6 +351,8 @@ Esempi:
                         help="Numero massimo di post da recuperare (default: 0 = tutti)")
     parser.add_argument("--timeout", type=int, default=POLL_TIMEOUT, metavar="SEC",
                         help="Timeout massimo di attesa per il run Apify (default: 300)")
+    parser.add_argument("--download-media", action="store_true",
+                        help="Scarica anche immagini, video e PDF allegati ai post")
 
     args = parser.parse_args()
 
@@ -306,6 +384,10 @@ Esempi:
     else:
         path = save_json(posts, slug)
     print(f"\n{len(posts)} post salvati in: {path}")
+
+    if args.download_media:
+        media_dir = download_media(posts, slug)
+        print(f"Contenuti multimediali salvati in: {media_dir}")
 
 
 if __name__ == "__main__":

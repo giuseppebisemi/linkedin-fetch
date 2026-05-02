@@ -65,6 +65,18 @@ Ogni elemento del dataset è un oggetto JSON con i campi principali:
 
 > **Nota:** La disponibilità esatta dei campi dipende dalla versione dell'actor e dalla struttura della pagina LinkedIn. Alcuni campi possono mancare o essere `null`.
 
+### Campi multimediali (struttura reale)
+
+Oltre ai campi base, l'actor restituisce anche i seguenti blocchi per i contenuti multimediali:
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `postImages` | `string[]` | URL delle immagini singole allegate al post |
+| `postVideo` | `object` | `{ "thumbnailUrl": "...", "videoUrl": "..." }` — URL video (MP4) e anteprima |
+| `document` | `object` | Documento PDF allegato (es. caroselli LinkedIn): `{ "title": "...", "transcribedDocumentUrl": "...", "coverPages": [{ "imageUrls": ["..."] }], "totalPageCount": N }` |
+
+> **Attenzione:** le URL multimediali contengono token con scadenza (`expiresAt`). Scaricale subito dopo il fetch se vuoi conservarle.
+
 ## Errori comuni dell'actor
 
 | Sintomo | Causa probabile | Azione |
