@@ -42,7 +42,7 @@ Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una p
 
 ```bash
 python3 scripts/fetch_posts.py \
-  --company "lybra" \
+  --company "nome-azienda" \
   --from 2020-01-01 \
   --to 2026-05-03 \
   --max-posts 10
@@ -52,7 +52,7 @@ python3 scripts/fetch_posts.py \
 
 ```bash
 python3 scripts/fetch_posts.py \
-  --company "lybra" \
+  --company "nome-azienda" \
   --from 2026-04-01 \
   --to 2026-04-30
 ```

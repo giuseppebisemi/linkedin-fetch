@@ -10,8 +10,8 @@ Uso (usato dalla skill linkedin-fetch):
     python fetch_posts.py --company <slug|url> --from YYYY-MM-DD --to YYYY-MM-DD
 
 Esempi:
-    python fetch_posts.py --company lybra --from 2026-04-01 --to 2026-04-30
-    python fetch_posts.py --company https://www.linkedin.com/company/lybra/ \
+    python fetch_posts.py --company nome-azienda --from 2026-04-01 --to 2026-04-30
+    python fetch_posts.py --company https://www.linkedin.com/company/nome-azienda/ \
                             --from 2026-03-01 --to 2026-03-31
 """
 
@@ -256,8 +256,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Esempi:
-  python fetch_posts.py --company lybra-consulting --from 2026-04-01 --to 2026-04-30
-  python fetch_posts.py --company https://www.linkedin.com/company/lybra-consulting/ \\
+  python fetch_posts.py --company nome-azienda --from 2026-04-01 --to 2026-04-30
+  python fetch_posts.py --company https://www.linkedin.com/company/nome-azienda/ \\
                         --from 2026-03-01 --to 2026-03-31
         """,
     )

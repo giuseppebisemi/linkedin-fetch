@@ -26,14 +26,14 @@ Se durante l'esecuzione compare "Errore: APIFY_API_TOKEN non trovato", guida l'u
 
 Prima di eseguire qualsiasi comando, chiedi (se non già forniti nel messaggio):
 
-- **URL** della pagina LinkedIn (es. `https://www.linkedin.com/company/lybra/` oppure solo lo slug `lybra`)
+- **URL** della pagina LinkedIn (es. `https://www.linkedin.com/company/nome-azienda/` oppure solo lo slug `nome-azienda`)
 - **Modalità**:
   - *Ultimi N post* — chiedi quanti (default: 10)
   - *Range di date* — chiedi l'espressione in linguaggio naturale (es. `"aprile 2026"`, `"dal 1 marzo al 30 marzo 2026"`). Convertila in date `YYYY-MM-DD` esplicite.
 
 Se l'utente fornisce già URL e parametri nel messaggio originale, salta le domande e procedi direttamente.
 
-**Pattern URL → slug:** Se l'utente passa un URL completo come `https://www.linkedin.com/company/lybra/`, estrai lo slug (`lybra`) e passalo a `--company`. Lo script accetta sia URL che slug, ma passare lo slug nel `--company` è sufficiente.
+**Pattern URL → slug:** Se l'utente passa un URL completo come `https://www.linkedin.com/company/nome-azienda/`, estrai lo slug (`nome-azienda`) e passalo a `--company`. Lo script accetta sia URL che slug, ma passare lo slug nel `--company` è sufficiente.
 
 ### 2. Esegui lo script
 
@@ -50,7 +50,7 @@ Usa `--max-posts N` con un range di date molto ampio (dal 2020-01-01 a oggi):
 
 ```bash
 python3 scripts/fetch_posts.py \
-  --company "lybra" \
+  --company "nome-azienda" \
   --from 2020-01-01 \
   --to $(date +%Y-%m-%d) \
   --max-posts 10
@@ -62,7 +62,7 @@ Converti l'espressione in date esplicite `YYYY-MM-DD` e passale con `--from` / `
 
 ```bash
 python3 scripts/fetch_posts.py \
-  --company "lybra" \
+  --company "nome-azienda" \
   --from 2026-04-01 \
   --to 2026-04-30
 ```
@@ -99,7 +99,7 @@ Dopo l'esecuzione, riporta all'utente:
 
 ## Esempio di interazione completa
 
-**Utente:** "Scarica gli ultimi 10 post di Lybra da LinkedIn"
+**Utente:** "Scarica gli ultimi 10 post di Nome Azienda da LinkedIn"
 
 **Modello:** (non chiede nulla, parametri già forniti)
 
@@ -107,13 +107,13 @@ Dopo l'esecuzione, riporta all'utente:
 
 ```bash
 python3 scripts/fetch_posts.py \
-  --company "lybra" \
+  --company "nome-azienda" \
   --from 2020-01-01 \
   --to 2026-05-02 \
   --max-posts 10
 ```
 
-**Modello:** "10 post salvati in: `/percorso/linkedin_posts_lybra_20260502_143022.json`"
+**Modello:** "10 post salvati in: `/percorso/linkedin_posts_nome-azienda_20260502_143022.json`"
 
 ## Riferimenti tecnici
 

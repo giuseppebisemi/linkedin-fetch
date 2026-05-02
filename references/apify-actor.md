@@ -13,7 +13,7 @@ L'actor accetta i seguenti parametri (passati via JSON nel body della chiamata P
 
 | Parametro | Tipo | Obbligatorio | Descrizione |
 |-----------|------|--------------|-------------|
-| `targetUrls` | `string[]` | Sì | Lista di URL delle pagine LinkedIn aziendali (es. `["https://www.linkedin.com/company/lybra/"]`). Supporta più URL in un unico run. |
+| `targetUrls` | `string[]` | Sì | Lista di URL delle pagine LinkedIn aziendali (es. `["https://www.linkedin.com/company/nome-azienda/"]`). Supporta più URL in un unico run. |
 | `postedLimitDate` | `string` | No | Data limite inferiore per i post, nel formato `YYYY-MM-DD`. L'actor scarta i post pubblicati prima di questa data. Nel nostro script corrisponde a `--from`. |
 | `maxPosts` | `number` | No | Numero massimo di post da recuperare per ogni URL. `0` o omesso = nessun limite. Mappato su `--max-posts`. |
 
@@ -56,7 +56,7 @@ Ogni elemento del dataset è un oggetto JSON con i campi principali:
 | `postedAt` | `object` | `{ "date": "2026-04-15T09:30:00.000Z", "text": "15 April 2026 at 09:30" }` |
 | `text` | `string` | Testo completo del post (può contenere HTML) |
 | `url` | `string` | URL diretto al post su LinkedIn |
-| `author` | `object` | `{ "name": "Lybra", "url": "..." }` |
+| `author` | `object` | `{ "name": "Nome Azienda", "url": "..." }` |
 | `images` | `string[]` | URL delle immagini allegate |
 | `reactions` | `number` | Conteggio totale reazioni |
 | `comments` | `number` | Conteggio commenti |
