@@ -284,14 +284,15 @@ def download_media(posts: list[dict], slug: str) -> Path:
         doc_url = doc.get("transcribedDocumentUrl")
         if doc_url:
             _download_file(doc_url, post_dir / "document.pdf")
-        covers = doc.get("coverPages") or [] if doc else []
-        if covers:
-            cov_dir = post_dir / "covers"
-            cov_dir.mkdir(exist_ok=True)
-            for page_idx, page in enumerate(covers, 1):
-                for img_idx, url in enumerate(page.get("imageUrls", []), 1):
-                    ext = _ext_from_url(url) or ".jpg"
-                    _download_file(url, cov_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
+        else:
+            covers = doc.get("coverPages") or [] if doc else []
+            if covers:
+                cov_dir = post_dir / "covers"
+                cov_dir.mkdir(exist_ok=True)
+                for page_idx, page in enumerate(covers, 1):
+                    for img_idx, url in enumerate(page.get("imageUrls", []), 1):
+                        ext = _ext_from_url(url) or ".jpg"
+                        _download_file(url, cov_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
 
     return media_dir
 
