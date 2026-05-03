@@ -137,9 +137,9 @@ def sort_by_date(items: list[dict]) -> list[dict]:
 
 # ── output ────────────────────────────────────────────────────────────────────
 
-def save_json(posts: list[dict], slug: str) -> Path:
+def save_json(posts: list[dict], slug: str, base_dir: Path) -> Path:
     ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = Path.cwd() / f"linkedin_posts_{slug}_{ts}.json"
+    path = base_dir / f"linkedin_posts_{slug}_{ts}.json"
     path.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 
@@ -172,9 +172,9 @@ def _download_file(url: str, dest: Path) -> bool:
     return False
 
 
-def download_media(posts: list[dict], slug: str) -> Path:
+def download_media(posts: list[dict], slug: str, base_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    media_dir = Path.cwd() / f"linkedin_posts_{slug}_{ts}_media"
+    media_dir = base_dir / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
 
     for post in posts:
@@ -184,26 +184,22 @@ def download_media(posts: list[dict], slug: str) -> Path:
 
         images = post.get("postImages") or []
         if images:
-            img_dir = post_dir / "images"
-            img_dir.mkdir(exist_ok=True)
             for idx, img_obj in enumerate(images, 1):
                 url = img_obj.get("url")
                 if url:
                     ext = _ext_from_url(url) or ".jpg"
-                    _download_file(url, img_dir / f"image_{idx:03d}{ext}")
+                    _download_file(url, post_dir / f"image_{idx:03d}{ext}")
 
         video = post.get("postVideo") or {}
         video_url = video.get("videoUrl")
         thumb_url = video.get("thumbnailUrl")
         if video_url or thumb_url:
-            vid_dir = post_dir / "video"
-            vid_dir.mkdir(exist_ok=True)
             if thumb_url:
                 ext = _ext_from_url(thumb_url) or ".jpg"
-                _download_file(thumb_url, vid_dir / f"thumbnail{ext}")
+                _download_file(thumb_url, post_dir / f"thumbnail{ext}")
             if video_url:
                 ext = _ext_from_url(video_url) or ".mp4"
-                _download_file(video_url, vid_dir / f"video{ext}")
+                _download_file(video_url, post_dir / f"video{ext}")
 
         doc = post.get("document") or {}
         doc_url = doc.get("transcribedDocumentUrl")
@@ -212,12 +208,10 @@ def download_media(posts: list[dict], slug: str) -> Path:
         else:
             covers = doc.get("coverPages") or [] if doc else []
             if covers:
-                cov_dir = post_dir / "covers"
-                cov_dir.mkdir(exist_ok=True)
                 for page_idx, page in enumerate(covers, 1):
                     for img_idx, url in enumerate(page.get("imageUrls", []), 1):
                         ext = _ext_from_url(url) or ".jpg"
-                        _download_file(url, cov_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
+                        _download_file(url, post_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
 
     return media_dir
 
@@ -327,16 +321,29 @@ Esempi:
         print("\nNessun post trovato.")
         sys.exit(0)
 
+    # Creazione cartella di output con JSON e media raggruppati
     if args.output:
-        path = Path(args.output)
-        path.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
+        output_path = Path(args.output)
+        if output_path.suffix == ".json":
+            # Se l'output è un file JSON, crea cartella accanto
+            base_dir = output_path.parent / f"{output_path.stem}_media"
+        else:
+            # Se è una directory, usa quella
+            base_dir = output_path
     else:
-        path = save_json(posts, slug)
-    print(f"\n{len(posts)} post salvati in: {path}")
+        # Default: cartella con nome slug
+        base_dir = Path.cwd() / f"linkedin_posts_{slug}"
+
+    # Salva JSON nella cartella
+    json_path = base_dir / f"linkedin_posts_{slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n{len(posts)} post salvati in: {json_path}")
 
     if args.download_media:
-        media_dir = download_media(posts, slug)
+        media_dir = download_media(posts, slug, base_dir)
         print(f"Contenuti multimediali salvati in: {media_dir}")
+        print(f"  Struttura: {media_dir}/<post_id>/image_001.jpg, video.mp4, document.pdf, ...")
 
 
 if __name__ == "__main__":
