@@ -186,9 +186,11 @@ def download_media(posts: list[dict], slug: str) -> Path:
         if images:
             img_dir = post_dir / "images"
             img_dir.mkdir(exist_ok=True)
-            for idx, url in enumerate(images, 1):
-                ext = _ext_from_url(url) or ".jpg"
-                _download_file(url, img_dir / f"image_{idx:03d}{ext}")
+            for idx, img_obj in enumerate(images, 1):
+                url = img_obj.get("url")
+                if url:
+                    ext = _ext_from_url(url) or ".jpg"
+                    _download_file(url, img_dir / f"image_{idx:03d}{ext}")
 
         video = post.get("postVideo") or {}
         video_url = video.get("videoUrl")
