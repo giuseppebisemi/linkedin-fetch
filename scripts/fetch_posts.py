@@ -172,14 +172,25 @@ def _download_file(url: str, dest: Path) -> bool:
     return False
 
 
+def _post_folder_name(post: dict) -> str:
+    """Nome della cartella per un post: YYYYMMDDTHHMMSS_id (es. 20260415T103022_7445786160687169536)"""
+    post_id = str(post.get("id", "unknown"))
+    post_date = (post.get("postedAt") or {}).get("date", "")
+    try:
+        dt = datetime.fromisoformat(post_date.replace("Z", "+00:00"))
+        date_str = dt.strftime("%Y%m%dT%H%M%S")
+    except (ValueError, AttributeError):
+        date_str = "unknown"
+    return f"{date_str}_{post_id}"
+
+
 def download_media(posts: list[dict], slug: str, base_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     media_dir = base_dir / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
 
     for post in posts:
-        post_id = str(post.get("id", "unknown"))
-        post_dir = media_dir / post_id
+        post_dir = media_dir / _post_folder_name(post)
         post_dir.mkdir(exist_ok=True)
 
         images = post.get("postImages") or []
@@ -343,7 +354,7 @@ Esempi:
     if args.download_media:
         media_dir = download_media(posts, slug, base_dir)
         print(f"Contenuti multimediali salvati in: {media_dir}")
-        print(f"  Struttura: {media_dir}/<post_id>/image_001.jpg, video.mp4, document.pdf, ...")
+        print(f"  Struttura: {media_dir}/<YYYYMMDDTHHMMSS_id>/image_001.jpg, video.mp4, document.pdf, ...")
 
 
 if __name__ == "__main__":
