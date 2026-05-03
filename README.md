@@ -1,6 +1,6 @@
 # linkedin-fetch
 
-Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una pagina aziendale LinkedIn tramite [Apify](https://apify.com/) e li salva in formato JSON strutturato.
+Una skill per Claude Code che recupera post da pagine LinkedIn aziendali tramite Apify, con supporto per finestre temporali e download media.
 
 ## Funzionalità
 
@@ -9,6 +9,7 @@ Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una p
 - Limita il numero massimo di post con `--max-posts`
 - Timeout configurabile per l'esecuzione dello scraping su Apify
 - Output JSON con item completo dell'actor: testo (`content`), autore, engagement (likes, commenti, shares, breakdown reazioni), URL canonico, media
+- Scarica immagini, video e PDF allegati ai post (opzionale: usa `--download-media`)
 
 ## Prerequisiti
 
@@ -36,6 +37,27 @@ Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una p
    APIFY_API_TOKEN=il_tuo_token
    ```
 
+## Installazione veloce
+
+Esegui lo script di setup per installare le dipendenze e configurare l'ambiente:
+
+```bash
+python3 scripts/setup.sh
+```
+
+Questo script:
+- Verifica Python 3.8+
+- Installa le dipendenze da `requirements.txt`
+- Crea il file `.env` da `.env.example`
+
+## Verifica
+
+Dopo l'installazione, esegui il test per verificare che tutto funzioni:
+
+```bash
+python3 scripts/test.py
+```
+
 ## Utilizzo
 
 ### Finestra relativa (più veloce)
@@ -43,15 +65,15 @@ Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una p
 Per "ultime 24h", "ultimo mese", "ultimo trimestre" ecc. usa `--posted-limit`. È mappato sul parametro nativo `postedLimit` dell'actor, che interrompe lo scroll quando esce dalla finestra.
 
 ```bash
-python3 scripts/fetch_posts.py --company "nome-azienda" --posted-limit month
-python3 scripts/fetch_posts.py --company "nome-azienda" --posted-limit 24h
+python3 scripts/fetch_posts.py --company google --posted-limit month
+python3 scripts/fetch_posts.py --company google --posted-limit 24h
 ```
 
 ### Ultimi N post
 
 ```bash
 python3 scripts/fetch_posts.py \
-  --company "nome-azienda" \
+  --company google \
   --posted-limit any \
   --max-posts 10
 ```
@@ -60,7 +82,7 @@ python3 scripts/fetch_posts.py \
 
 ```bash
 python3 scripts/fetch_posts.py \
-  --company "nome-azienda" \
+  --company google \
   --from 2026-04-01 \
   --to 2026-04-30
 ```
@@ -87,7 +109,10 @@ linkedin-fetch/
 ├── .gitignore                # Esclude secret e output generati
 ├── scripts/
 │   ├── fetch_posts.py        # Script principale
+│   ├── setup.sh              # Script di installazione dipendenze
+│   ├── test.py               # Smoke test script
 │   ├── requirements.txt      # Dipendenze Python
+│   ├── .env                  # Token Apify (non tracciato da git)
 │   └── .env.example          # Template delle variabili d'ambiente
 └── references/
     └── apify-actor.md        # Riferimento API dell'actor Apify
@@ -97,10 +122,11 @@ linkedin-fetch/
 
 | Errore | Soluzione |
 |--------|-----------|
-| Dipendenza mancante (`apify-client`, `python-dotenv`) | Esegui `pip install -r scripts/requirements.txt` |
-| APIFY_API_TOKEN non trovato | Esporta il token o aggiungilo a `scripts/.env` |
+| Dipendenza mancante (`apify-client`, `python-dotenv`) | Esegui `python3 scripts/setup.sh` |
+| APIFY_API_TOKEN non trovato | Usa `python3 scripts/setup.sh` e compila `.env`, oppure esporta il token |
 | 401 da Apify | Verifica che il token sia valido e non scaduto |
 | Timeout del run | Aumenta `--timeout` o controlla i log su console Apify |
+| Errore: specifica --from...oppure --posted-limit | Usa `--posted-limit any` se vuoi tutti i post o specifica un range con `--from`/`--to` |
 
 ## Licenza
 
