@@ -97,7 +97,7 @@ linkedin-fetch/
 
 | Errore | Soluzione |
 |--------|-----------|
-| Dipendenza mancante | Esegui `pip install -r scripts/requirements.txt` |
+| Dipendenza mancante (`apify-client`, `python-dotenv`) | Esegui `pip install -r scripts/requirements.txt` |
 | APIFY_API_TOKEN non trovato | Esporta il token o aggiungilo a `scripts/.env` |
 | 401 da Apify | Verifica che il token sia valido e non scaduto |
 | Timeout del run | Aumenta `--timeout` o controlla i log su console Apify |
