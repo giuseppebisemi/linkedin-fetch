@@ -1,44 +1,60 @@
 # Actor Apify: harvestapi~linkedin-company-posts
 
-Questo file documenta l'actor Apify usato da `fetch_posts.py`.
+Questo file documenta l'actor Apify usato da `fetch_posts.py`, basato sulla documentazione ufficiale dell'actor (`https://apify.com/harvestapi/linkedin-company-posts`).
 
 ## Identificativo
 
 - **Actor ID:** `harvestapi~linkedin-company-posts`
 - **Store URL:** https://apify.com/harvestapi/linkedin-company-posts
+- **Pricing:** $1.50 / 1.000 post (pay-per-event)
 
-## Parametri di input
+## Parametri di input usati dallo script
 
-L'actor accetta i seguenti parametri (passati via JSON nel body della chiamata POST):
+L'actor accetta molti parametri (vedi [schema completo](https://apify.com/harvestapi/linkedin-company-posts) per la lista totale). Lo script ne usa solo questi:
 
-| Parametro | Tipo | Obbligatorio | Descrizione |
-|-----------|------|--------------|-------------|
-| `targetUrls` | `string[]` | Sì | Lista di URL delle pagine LinkedIn aziendali (es. `["https://www.linkedin.com/company/nome-azienda/"]`). Supporta più URL in un unico run. |
-| `postedLimitDate` | `string` | No | Data limite inferiore per i post, nel formato `YYYY-MM-DD`. L'actor scarta i post pubblicati prima di questa data. Nel nostro script corrisponde a `--from`. |
-| `maxPosts` | `number` | No | Numero massimo di post da recuperare per ogni URL. `0` o omesso = nessun limite. Mappato su `--max-posts`. |
+| Parametro actor | Flag CLI | Tipo | Descrizione |
+|-----------------|----------|------|-------------|
+| `targetUrls` | `--company` (mappato) | `string[]` | URL LinkedIn della company. Lo script accetta uno slug o un URL e costruisce sempre `https://www.linkedin.com/company/<slug>/`. |
+| `postedLimitDate` | `--from` | `string` | Data **limite inferiore**. L'actor scrolla il feed dal post più recente a ritroso e si ferma quando incontra un post antecedente a questa data. Formato `YYYY-MM-DD`. |
+| `postedLimit` | `--posted-limit` | `string` | Finestra **temporale relativa** valutata lato actor durante lo scroll. Valori: `1h`, `24h`, `week`, `month`, `3months`, `6months`, `year`, `any`. |
+| `maxPosts` | `--max-posts` | `number` | Massimo per URL. `0` = tutti. **Default actor: 10** (lo script lo forza a 0 se non specificato). |
 
-### Note sui parametri
+`postedLimitDate` e `postedLimit` sono mutuamente esclusivi nel CLI dello script: una richiesta usa l'uno o l'altro, mai entrambi.
 
-- `postedLimitDate` filtra **lato actor**, quindi riduce il tempo di esecuzione quando si cerca un range ristretto.
-- Il filtro `--to` (data fine) viene applicato **lato script** dopo aver scaricato il dataset, perché l'actor non espone un parametro di data fine.
-- Se si vuole recuperare solo gli ultimi N post, conviene impostare un `postedLimitDate` molto indietro nel tempo (es. `2020-01-01`) e usare `maxPosts`.
+### Filtro upper-bound `--to`
 
-## Endpoint API usati
+L'actor **non espone un parametro di data fine**. Quando l'utente fornisce `--from`/`--to`, lo script:
 
-Lo script `fetch_posts.py` interagisce con tre endpoint REST di Apify:
+1. passa `--from` come `postedLimitDate` all'actor (riduzione lato actor),
+2. scarica tutti i post che l'actor ha trovato tra `from` e oggi,
+3. filtra lato client quelli successivi a `--to`.
+
+Conseguenza: per recuperare un range stretto in un'epoca lontana (es. "marzo 2024") l'actor deve comunque attraversare tutti i post da marzo 2024 a oggi. In quei casi il run può durare diversi minuti — considera di alzare `--timeout`.
+
+### Parametri non usati (riferimento)
+
+L'actor espone altri parametri che lo script non sfrutta. Sono qui solo per riferimento futuro:
+
+- `includeQuotePosts`, `includeReposts` — booleani per includere/escludere quote-post e repost (default: tutti inclusi).
+- `scrapeReactions` + `maxReactions` — recupera la lista delle reazioni come item separati nel dataset. **Ogni reazione è fatturata come post extra.**
+- `scrapeComments` + `maxComments` + `commentsPostedLimit` — idem per i commenti.
+- `postNestedReactions`, `postNestedComments` — embeddano reazioni/commenti dentro l'item del post (sconsigliati: rischio di superare il max item size dell'actor).
+
+## Endpoint REST Apify usati
+
+Lo script `fetch_posts.py` interagisce con tre endpoint:
 
 1. **Avvio run:**
    ```
    POST https://api.apify.com/v2/acts/{ACTOR_ID}/runs?token={token}
    ```
-   Body JSON con i parametri di input sopra elencati.
-   Restituisce `runId` e `defaultDatasetId`.
+   Body JSON con `targetUrls`, `maxPosts`, e uno tra `postedLimitDate` o `postedLimit`. Restituisce `runId` e `defaultDatasetId`.
 
 2. **Polling stato:**
    ```
    GET https://api.apify.com/v2/actor-runs/{runId}?token={token}
    ```
-   Lo stato può essere `RUNNING`, `SUCCEEDED`, `FAILED`, `ABORTED`, `TIMED-OUT`.
+   Stati: `RUNNING`, `SUCCEEDED`, `FAILED`, `ABORTED`, `TIMED-OUT`.
 
 3. **Download dataset:**
    ```
@@ -48,45 +64,73 @@ Lo script `fetch_posts.py` interagisce con tre endpoint REST di Apify:
 
 ## Struttura dell'output (item)
 
-Ogni elemento del dataset è un oggetto JSON con i campi principali:
+Lo script salva nel JSON finale **l'item completo restituito dall'actor**, senza proiezioni o rinomine. Significa che tutti i campi qui sotto sono presenti nel file di output.
+
+I campi sono basati sul sample ufficiale dell'actor.
+
+### Campi del post
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| `postId` | `string` | ID univoco del post su LinkedIn |
-| `postedAt` | `object` | `{ "date": "2026-04-15T09:30:00.000Z", "text": "15 April 2026 at 09:30" }` |
-| `text` | `string` | Testo completo del post (può contenere HTML) |
-| `url` | `string` | URL diretto al post su LinkedIn |
-| `author` | `object` | `{ "name": "Nome Azienda", "url": "..." }` |
-| `images` | `string[]` | URL delle immagini allegate |
-| `reactions` | `number` | Conteggio totale reazioni |
-| `comments` | `number` | Conteggio commenti |
-| `shares` | `number` | Conteggie condivisioni |
-| `reposts` | `number` | Conteggio repost |
+| `type` | `string` | `"post"` per i post normali. |
+| `id` | `string` | ID univoco LinkedIn del post (es. `"7329207003942125568"`). Usato come nome cartella in `--download-media`. |
+| `linkedinUrl` | `string` | URL canonico del post su LinkedIn. |
+| `content` | `string` | **Testo completo** del post. Può contenere link `https://lnkd.in/...`. Questo è il campo da leggere per analisi testuali, non `text`. |
+| `postedAt` | `object` | `{ "timestamp": 1747419119821, "date": "2025-05-16T18:11:59.821Z", "postedAgoShort": "6d", "postedAgoText": "..." }`. Lo script legge `postedAt.date` per ordinare e filtrare. |
 
-> **Nota:** La disponibilità esatta dei campi dipende dalla versione dell'actor e dalla struttura della pagina LinkedIn. Alcuni campi possono mancare o essere `null`.
+### Autore
 
-### Campi multimediali (struttura reale)
+| Campo | Descrizione |
+|-------|-------------|
+| `author.name` | Nome visualizzato dell'azienda o profilo. |
+| `author.publicIdentifier` | Slug pubblico (es. `williamhgates`). |
+| `author.universalName` | Identifier interno LinkedIn (può essere `null`). |
+| `author.type` | `"profile"` o `"company"`. |
+| `author.linkedinUrl` | URL del profilo/pagina. |
+| `author.info` | Headline / descrizione breve. |
+| `author.website`, `author.websiteLabel` | Link esterno + label. |
+| `author.avatar` | `{ "url": "...", "width": N, "height": N, "expiresAt": <timestamp> }` |
 
-Oltre ai campi base, l'actor restituisce anche i seguenti blocchi per i contenuti multimediali:
+### Engagement
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| `postImages` | `string[]` | URL delle immagini singole allegate al post |
-| `postVideo` | `object` | `{ "thumbnailUrl": "...", "videoUrl": "..." }` — URL video (MP4) e anteprima |
-| `document` | `object` | Documento PDF allegato (es. caroselli LinkedIn): `{ "title": "...", "transcribedDocumentUrl": "...", "coverPages": [{ "imageUrls": ["..."] }], "totalPageCount": N }` |
+| `engagement.likes` | `number` | Conteggio totale "mi piace" (somma di tutte le reazioni). |
+| `engagement.comments` | `number` | Numero di commenti. |
+| `engagement.shares` | `number` | Numero di condivisioni. |
+| `engagement.reactions` | `array` | Breakdown per tipo: `[{ "type": "LIKE", "count": 2477 }, { "type": "EMPATHY", "count": 158 }, ...]`. Tipi visti: `LIKE`, `APPRECIATION`, `EMPATHY`, `PRAISE`, `INTEREST`, `ENTERTAINMENT`. |
 
-> **Attenzione:** le URL multimediali contengono token con scadenza (`expiresAt`). Scaricale subito dopo il fetch se vuoi conservarle.
+### Contenuti multimediali
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `postImages` | `string[]` | URL delle immagini singole allegate al post. |
+| `postVideo` | `object` | `{ "thumbnailUrl": "...", "videoUrl": "..." }` — anteprima e MP4 del video. Presente solo per post video. |
+| `document` | `object` | Documento PDF / carosello LinkedIn: `{ "title": "...", "transcribedDocumentUrl": "...", "coverPages": [{ "width": N, "height": N, "imageUrls": ["..."] }], "totalPageCount": N }`. Lo script scarica `transcribedDocumentUrl` se presente; altrimenti le immagini delle `coverPages`. |
+
+### Altri campi presenti nell'output
+
+| Campo | Descrizione |
+|-------|-------------|
+| `socialContent` | Flag UI di LinkedIn (`hideCommentsCount`, `hideReactionsCount`, `shareUrl`, ecc.). Raramente utile, ma è nel JSON. |
+| `reactions` | Lista delle reazioni (con autore di ciascuna). **Solo se l'actor è stato chiamato con `scrapeReactions: true` — la skill non lo fa.** |
+| `comments` | Lista dei commenti (con testo, autore, timestamp). **Solo se `scrapeComments: true` — la skill non lo fa.** |
+
+> **Nota:** la disponibilità esatta dei campi dipende dal tipo di post (testo / immagini / video / documento) e dall'azienda. Il codice usa pattern difensivi `(item.get(...) or {})`.
+
+> **Attenzione URL temporanee:** le URL di immagini, video, avatar e documenti contengono token con `expiresAt` (qualche giorno). Se vuoi conservare i media, usa `--download-media` durante lo stesso run o subito dopo.
 
 ## Errori comuni dell'actor
 
 | Sintomo | Causa probabile | Azione |
 |---------|-----------------|--------|
 | Run `FAILED` subito | URL azienda inesistente o pagina privata | Verifica lo slug o l'URL LinkedIn |
-| Dataset vuoto | `postedLimitDate` troppo recente o nessun post nel periodo | Allarga il range di date |
-| Run `TIMED-OUT` | LinkedIn ha rallentato/rifiutato lo scraping | Riprova dopo qualche minuto; se persiste, controlla i log su Apify Console |
+| Dataset vuoto | `postedLimitDate` troppo recente o nessun post nel periodo | Allarga il range di date o prova `--posted-limit year` |
+| Run `TIMED-OUT` | LinkedIn ha rallentato/rifiutato lo scraping, oppure range troppo ampio | Riprova dopo qualche minuto; per range lunghi alza `--timeout` |
 | HTTP 401 | Token Apify non valido o scaduto | Rigenera il token su https://console.apify.com/account/integrations |
 
 ## Link utili
 
 - Console Apify (runs): https://console.apify.com/actors/runs
+- Pagina actor: https://apify.com/harvestapi/linkedin-company-posts
 - Documentazione API Apify: https://docs.apify.com/api/v2

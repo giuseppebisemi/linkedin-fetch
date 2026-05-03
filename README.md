@@ -5,10 +5,10 @@ Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una p
 ## Funzionalità
 
 - Recupera i post dato l'URL o lo slug dell'azienda
-- Filtra per intervallo di date o limita agli ultimi N post
+- Due modalità per la finestra temporale: range esplicito (`--from` / `--to`) o finestra relativa nativa dell'actor (`--posted-limit 24h|week|month|3months|6months|year|any`)
+- Limita il numero massimo di post con `--max-posts`
 - Timeout configurabile per l'esecuzione dello scraping su Apify
-- Controllo automatico delle dipendenze e messaggi di errore chiari
-- Output salvato come JSON con timestamp, testo completo e metriche di engagement
+- Output JSON con item completo dell'actor: testo (`content`), autore, engagement (likes, commenti, shares, breakdown reazioni), URL canonico, media
 
 ## Prerequisiti
 
@@ -38,17 +38,25 @@ Una skill per [Claude Code](https://claude.ai/code) che recupera i post da una p
 
 ## Utilizzo
 
+### Finestra relativa (più veloce)
+
+Per "ultime 24h", "ultimo mese", "ultimo trimestre" ecc. usa `--posted-limit`. È mappato sul parametro nativo `postedLimit` dell'actor, che interrompe lo scroll quando esce dalla finestra.
+
+```bash
+python3 scripts/fetch_posts.py --company "nome-azienda" --posted-limit month
+python3 scripts/fetch_posts.py --company "nome-azienda" --posted-limit 24h
+```
+
 ### Ultimi N post
 
 ```bash
 python3 scripts/fetch_posts.py \
   --company "nome-azienda" \
-  --from 2020-01-01 \
-  --to 2026-05-03 \
+  --posted-limit any \
   --max-posts 10
 ```
 
-### Intervallo di date
+### Intervallo di date specifico
 
 ```bash
 python3 scripts/fetch_posts.py \
@@ -62,11 +70,13 @@ python3 scripts/fetch_posts.py \
 | Flag | Descrizione |
 |------|-------------|
 | `--company URL\|SLUG` | URL o slug della pagina LinkedIn (obbligatorio) |
+| `--posted-limit WINDOW` | Finestra relativa: `1h`, `24h`, `week`, `month`, `3months`, `6months`, `year`, `any`. Mutuamente esclusivo con `--from`/`--to`. |
 | `--from YYYY-MM-DD` | Data inizio (inclusa) |
 | `--to YYYY-MM-DD` | Data fine (inclusa) |
 | `--max-posts N` | Numero massimo di post da recuperare (default: 0 = tutti) |
 | `--timeout SEC` | Timeout di attesa per il run Apify in secondi (default: 300) |
 | `--output FILE` | Percorso personalizzato per il file JSON di output |
+| `--download-media` | Scarica anche immagini, video e PDF allegati ai post |
 
 ## Struttura del progetto
 

@@ -3,16 +3,20 @@
 LinkedIn Company Posts Fetcher — Apify / HarvestAPI
 
 Recupera i post di una pagina LinkedIn aziendale tramite l'actor
-harvestapi/linkedin-company-posts su Apify, filtra per range di date
-e salva un JSON.
+harvestapi/linkedin-company-posts su Apify e salva un JSON.
 
-Uso (usato dalla skill linkedin-fetch):
-    python fetch_posts.py --company <slug|url> --from YYYY-MM-DD --to YYYY-MM-DD
+Due modalità per limitare la finestra temporale:
+- --from / --to     range esplicito (lower bound passato all'actor come
+                    `postedLimitDate`, upper bound applicato lato script)
+- --posted-limit    finestra relativa nativa dell'actor: 24h, week, month,
+                    3months, 6months, year, any. Più efficiente di --from
+                    quando vuoi "ultime 24h / ultimo mese" perché l'actor
+                    interrompe lo scroll non appena esce dalla finestra.
 
 Esempi:
     python fetch_posts.py --company nome-azienda --from 2026-04-01 --to 2026-04-30
-    python fetch_posts.py --company https://www.linkedin.com/company/nome-azienda/ \
-                            --from 2026-03-01 --to 2026-03-31
+    python fetch_posts.py --company nome-azienda --posted-limit month --max-posts 50
+    python fetch_posts.py --company nome-azienda --posted-limit 24h
 """
 
 import argparse
@@ -36,13 +40,16 @@ except ImportError as exc:
 
 load_dotenv(Path(__file__).parent / ".env")
 
-APIFY_BASE      = "https://api.apify.com/v2"
-ACTOR_ID        = "harvestapi~linkedin-company-posts"
-ANTHROPIC_URL   = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+APIFY_BASE = "https://api.apify.com/v2"
+ACTOR_ID   = "harvestapi~linkedin-company-posts"
 
 POLL_INTERVAL = 10   # secondi tra un poll e l'altro
 POLL_TIMEOUT  = 300  # secondi massimi di attesa per il run
+
+# Valori accettati dal parametro `postedLimit` dell'actor HarvestAPI.
+# Sono finestre temporali relative valutate lato actor durante lo scroll
+# del feed: "24h" significa "tutti i post pubblicati nelle ultime 24 ore".
+POSTED_LIMIT_CHOICES = ("1h", "24h", "week", "month", "3months", "6months", "year", "any")
 
 
 # ── API keys ──────────────────────────────────────────────────────────────────
@@ -63,15 +70,6 @@ def get_apify_token() -> str:
     return key
 
 
-def get_anthropic_key() -> str:
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        print("Errore: ANTHROPIC_API_KEY non trovata. Necessaria solo per --dates.")
-        print("Suggerimento: passa --from YYYY-MM-DD --to YYYY-MM-DD invece.")
-        sys.exit(1)
-    return key
-
-
 # ── date helpers ──────────────────────────────────────────────────────────────
 
 def parse_iso_date(s: str, *, end_of_day: bool = False) -> datetime:
@@ -83,63 +81,31 @@ def parse_iso_date(s: str, *, end_of_day: bool = False) -> datetime:
     return dt.replace(hour=23, minute=59, second=59) if end_of_day else dt
 
 
-def parse_natural_dates(text: str) -> tuple[datetime, datetime]:
-    """Fallback: chiede a Claude Haiku di interpretare un'espressione di date.
-    Usato solo se l'utente passa --dates anziché --from/--to."""
-    today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
-    prompt = (
-        f"Oggi è {today}.\n"
-        "L'utente ha scritto questa espressione di date: \"" + text + "\"\n\n"
-        "Estrai la data di inizio e fine del range. "
-        "Rispondi SOLO con un JSON nel formato: "
-        "{\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\"}\n"
-        "Nessun altro testo."
-    )
-
-    resp = requests.post(
-        ANTHROPIC_URL,
-        headers={
-            "x-api-key": get_anthropic_key(),
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": ANTHROPIC_MODEL,
-            "max_tokens": 64,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=15,
-    )
-
-    if resp.status_code != 200:
-        print(f"Errore API Anthropic: {resp.status_code}")
-        sys.exit(1)
-
-    raw = resp.json()["content"][0]["text"].strip()
-    raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    try:
-        parsed = json.loads(raw)
-        return (
-            parse_iso_date(parsed["from"]),
-            parse_iso_date(parsed["to"], end_of_day=True),
-        )
-    except Exception:
-        print(f"Errore nel parsing delle date: {raw}")
-        sys.exit(1)
-
-
 # ── Apify ─────────────────────────────────────────────────────────────────────
 
-def start_actor_run(company_url: str, date_from: datetime, token: str, max_posts: int = 0) -> tuple[str, str]:
-    """Avvia il run dell'actor. Restituisce (run_id, dataset_id)."""
+def start_actor_run(
+    company_url: str,
+    token: str,
+    *,
+    date_from: datetime | None = None,
+    posted_limit: str | None = None,
+    max_posts: int = 0,
+) -> tuple[str, str]:
+    """Avvia il run dell'actor. Restituisce (run_id, dataset_id).
+
+    Esattamente uno tra `date_from` (mappato su `postedLimitDate`) e
+    `posted_limit` (mappato su `postedLimit`) deve essere fornito.
+    """
+    body: dict = {"targetUrls": [company_url], "maxPosts": max_posts}
+    if date_from is not None:
+        body["postedLimitDate"] = date_from.strftime("%Y-%m-%d")
+    if posted_limit is not None:
+        body["postedLimit"] = posted_limit
+
     resp = requests.post(
         f"{APIFY_BASE}/acts/{ACTOR_ID}/runs",
         params={"token": token},
-        json={
-            "targetUrls": [company_url],
-            "postedLimitDate": date_from.strftime("%Y-%m-%d"),
-            "maxPosts": max_posts,
-        },
+        json=body,
         timeout=30,
     )
 
@@ -210,6 +176,10 @@ def filter_posts(items: list[dict], date_from: datetime, date_to: datetime) -> l
         if dt and date_from <= dt <= date_to:
             result.append(item)
     return sorted(result, key=lambda item: (item.get("postedAt") or {}).get("date") or "")
+
+
+def sort_by_date(items: list[dict]) -> list[dict]:
+    return sorted(items, key=lambda item: (item.get("postedAt") or {}).get("date") or "")
 
 
 # ── output ────────────────────────────────────────────────────────────────────
@@ -310,23 +280,6 @@ def resolve_company(raw: str) -> tuple[str, str]:
     return url, slug
 
 
-def resolve_date_range(args: argparse.Namespace) -> tuple[datetime, datetime]:
-    if args.date_from and args.date_to:
-        return (
-            parse_iso_date(args.date_from),
-            parse_iso_date(args.date_to, end_of_day=True),
-        )
-    if args.dates:
-        print("AVVISO: --dates è deprecato e richiede ANTHROPIC_API_KEY.")
-        print("         Converti le date in YYYY-MM-DD e usa --from / --to.")
-        print("  Interpreto le date con Claude Haiku...", end=" ", flush=True)
-        df, dt = parse_natural_dates(args.dates)
-        print(f"{df.strftime('%d/%m/%Y')} → {dt.strftime('%d/%m/%Y')}")
-        return df, dt
-    print("Errore: specifica --from YYYY-MM-DD --to YYYY-MM-DD")
-    sys.exit(2)
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Recupera i post di una pagina LinkedIn aziendale tramite Apify.",
@@ -334,18 +287,20 @@ def main():
         epilog="""
 Esempi:
   python fetch_posts.py --company nome-azienda --from 2026-04-01 --to 2026-04-30
-  python fetch_posts.py --company https://www.linkedin.com/company/nome-azienda/ \\
-                        --from 2026-03-01 --to 2026-03-31
+  python fetch_posts.py --company nome-azienda --posted-limit month --max-posts 50
+  python fetch_posts.py --company nome-azienda --posted-limit 24h
         """,
     )
     parser.add_argument("--company", required=True, metavar="URL|SLUG",
                         help="URL LinkedIn o nome breve dell'azienda")
     parser.add_argument("--from", dest="date_from", metavar="YYYY-MM-DD",
-                        help="Data di inizio (inclusa). Usa con --to.")
+                        help="Data di inizio (inclusa). Usa con --to. Mutuamente esclusivo con --posted-limit.")
     parser.add_argument("--to", dest="date_to", metavar="YYYY-MM-DD",
                         help="Data di fine (inclusa). Usa con --from.")
-    parser.add_argument("--dates", metavar="TESTO",
-                        help="DEPRECATO. Converti le date in YYYY-MM-DD e usa --from / --to.")
+    parser.add_argument("--posted-limit", choices=POSTED_LIMIT_CHOICES, metavar="WINDOW",
+                        help="Finestra temporale relativa nativa dell'actor: "
+                             + ", ".join(POSTED_LIMIT_CHOICES)
+                             + ". Più efficiente di --from/--to per richieste tipo 'ultime 24h' o 'ultimo mese'.")
     parser.add_argument("--output", metavar="FILE",
                         help="File JSON di output (default: linkedin_posts_<slug>_<ts>.json nella CWD)")
     parser.add_argument("--max-posts", type=int, default=0, metavar="N",
@@ -357,14 +312,39 @@ Esempi:
 
     args = parser.parse_args()
 
+    # Validazione modalità: o range esplicito o finestra relativa, non entrambi.
+    has_range = bool(args.date_from or args.date_to)
+    has_limit = bool(args.posted_limit)
+    if has_range and has_limit:
+        print("Errore: --from/--to e --posted-limit sono mutuamente esclusivi.")
+        sys.exit(2)
+    if not has_range and not has_limit:
+        print("Errore: specifica --from YYYY-MM-DD --to YYYY-MM-DD oppure --posted-limit WINDOW.")
+        sys.exit(2)
+    if has_range and not (args.date_from and args.date_to):
+        print("Errore: --from e --to vanno usati insieme.")
+        sys.exit(2)
+
+    date_from = parse_iso_date(args.date_from) if args.date_from else None
+    date_to   = parse_iso_date(args.date_to, end_of_day=True) if args.date_to else None
+
     print("\n── LinkedIn Company Posts Fetcher ──")
 
     company_url, slug = resolve_company(args.company)
-    date_from, date_to = resolve_date_range(args)
 
     token = get_apify_token()
     print(f"\nAvvio actor Apify per: {company_url}")
-    run_id, dataset_id = start_actor_run(company_url, date_from, token, args.max_posts)
+    if args.posted_limit:
+        print(f"Finestra: postedLimit={args.posted_limit}")
+    else:
+        print(f"Finestra: {args.date_from} → {args.date_to}")
+    run_id, dataset_id = start_actor_run(
+        company_url,
+        token,
+        date_from=date_from,
+        posted_limit=args.posted_limit,
+        max_posts=args.max_posts,
+    )
     print(f"Run ID: {run_id} — in attesa", end="", flush=True)
     wait_for_run(run_id, token, args.timeout)
     print(" completato.")
@@ -373,10 +353,15 @@ Esempi:
     raw_items = fetch_dataset(dataset_id, token)
     print(f"{len(raw_items)} post recuperati dall'actor.")
 
-    posts = filter_posts(raw_items, date_from, date_to)
+    # Con --from/--to applichiamo lato script il filtro upper-bound (--to),
+    # perché l'actor non lo espone. Con --posted-limit ci fidiamo dell'actor.
+    if date_from and date_to:
+        posts = filter_posts(raw_items, date_from, date_to)
+    else:
+        posts = sort_by_date(raw_items)
 
     if not posts:
-        print("\nNessun post trovato nel range di date specificato.")
+        print("\nNessun post trovato.")
         sys.exit(0)
 
     if args.output:

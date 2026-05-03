@@ -1,6 +1,6 @@
 ---
 name: linkedin-fetch
-description: Recupera e salva in JSON i post di una pagina LinkedIn aziendale tramite Apify. Usa questa skill ogni volta che l'utente vuole scaricare post LinkedIn, recuperare post da una company page, creare un report di post LinkedIn, o fare scraping di una pagina aziendale su LinkedIn — anche se non usa esplicitamente la parola "skill". Triggera per frasi come "scarica i post di", "recupera i post LinkedIn di", "fetch LinkedIn", "voglio i post di [azienda] su LinkedIn", "prendi i post di aprile", ecc.
+description: Scarica i post di una pagina LinkedIn aziendale via Apify e li salva in JSON. Usa questa skill ogni volta che l'utente vuole recuperare, scaricare, esportare o fare scraping di post da una company page LinkedIn, anche se non nomina la skill. Triggera su frasi tipo "scarica i post di [azienda]", "recupera i post LinkedIn di X", "fetch LinkedIn", "voglio gli ultimi N post di [azienda]", "post di [azienda] di aprile/marzo/ultimo trimestre", "esporta i post LinkedIn di X".
 ---
 
 Questa skill orchestra `fetch_posts.py` per recuperare post da una pagina LinkedIn aziendale tramite Apify e salvarli in un file JSON locale.
@@ -27,38 +27,50 @@ Se durante l'esecuzione compare "Errore: APIFY_API_TOKEN non trovato", guida l'u
 Prima di eseguire qualsiasi comando, chiedi (se non già forniti nel messaggio):
 
 - **URL** della pagina LinkedIn (es. `https://www.linkedin.com/company/nome-azienda/` oppure solo lo slug `nome-azienda`)
-- **Modalità**:
-  - *Ultimi N post* — chiedi quanti (default: 10)
-  - *Range di date* — chiedi l'espressione in linguaggio naturale (es. `"aprile 2026"`, `"dal 1 marzo al 30 marzo 2026"`). Convertila in date `YYYY-MM-DD` esplicite.
+- **Quale finestra temporale**: ultimi N post, ultime 24h/settimana/mese, oppure un range di date specifico.
 
 Se l'utente fornisce già URL e parametri nel messaggio originale, salta le domande e procedi direttamente.
 
-**Pattern URL → slug:** Se l'utente passa un URL completo come `https://www.linkedin.com/company/nome-azienda/`, estrai lo slug (`nome-azienda`) e passalo a `--company`. Lo script accetta sia URL che slug, ma passare lo slug nel `--company` è sufficiente.
+**Pattern URL → slug:** Se l'utente passa un URL completo come `https://www.linkedin.com/company/nome-azienda/`, estrai lo slug (`nome-azienda`) e passalo a `--company`. Lo script accetta sia URL che slug, ma passare lo slug è più pulito.
 
 ### 2. Esegui lo script
 
-Lo script usa `argparse`. I percorsi sono:
+Lo script ha due modalità mutuamente esclusive per la finestra temporale: `--posted-limit` (finestra relativa nativa dell'actor) oppure `--from`/`--to` (range esplicito). **Scegli sempre la modalità più efficiente in base alla richiesta dell'utente.**
 
-```
-PYTHON = python3
-SCRIPT = scripts/fetch_posts.py
-```
+#### Quando usare `--posted-limit` (preferita per richieste relative)
 
-**Modalità ultimi N post:**
+`--posted-limit` mappa il parametro `postedLimit` dell'actor HarvestAPI: l'actor stesso interrompe lo scroll del feed quando esce dalla finestra. È **molto più veloce** di `--from`/`--to` per richieste tipo "ultime 24h" o "ultimo mese", perché evita download e filtri lato client.
 
-Usa `--max-posts N` con un range di date molto ampio (dal 2020-01-01 a oggi):
+Valori accettati: `1h`, `24h`, `week`, `month`, `3months`, `6months`, `year`, `any`.
+
+| Richiesta utente | Modalità da usare |
+|------------------|-------------------|
+| "ultime 24 ore", "oggi", "ieri" | `--posted-limit 24h` |
+| "questa settimana", "ultimi 7 giorni" | `--posted-limit week` |
+| "ultimo mese", "ultimi 30 giorni" | `--posted-limit month` |
+| "ultimo trimestre" | `--posted-limit 3months` |
+| "ultimo semestre" | `--posted-limit 6months` |
+| "ultimo anno" | `--posted-limit year` |
+| "tutti i post" | `--posted-limit any` (combina con `--max-posts` se vuoi un limite) |
 
 ```bash
 python3 scripts/fetch_posts.py \
   --company "nome-azienda" \
-  --from 2020-01-01 \
-  --to $(date +%Y-%m-%d) \
+  --posted-limit month
+```
+
+Per "ultimi N post" combina `--posted-limit any` con `--max-posts N`:
+
+```bash
+python3 scripts/fetch_posts.py \
+  --company "nome-azienda" \
+  --posted-limit any \
   --max-posts 10
 ```
 
-**Modalità range di date:**
+#### Quando usare `--from` / `--to` (range esplicito)
 
-Converti l'espressione in date esplicite `YYYY-MM-DD` e passale con `--from` / `--to`:
+Usa `--from` / `--to` solo quando l'utente specifica un **mese o intervallo specifico nel calendario** (es. "aprile 2026", "dal 1 marzo al 15 marzo 2026"). Converti l'espressione in date `YYYY-MM-DD` esplicite (oggi è la data nel system prompt; basa i calcoli su quella).
 
 ```bash
 python3 scripts/fetch_posts.py \
@@ -67,18 +79,24 @@ python3 scripts/fetch_posts.py \
   --to 2026-04-30
 ```
 
-Parametri principali dello script:
+**Importante — limite dell'actor:** Il parametro `postedLimitDate` esposto dall'actor è solo un limite **inferiore**. Quando passi `--from 2024-03-01 --to 2024-03-31`, l'actor scrolla dal post più recente fino al 1 marzo 2024 fetchando *tutti* i post intermedi, e lo script poi filtra `--to` lato client. Più `--from` è lontana nel passato, più lungo è il run. Per range stretti in epoche lontane avvisa l'utente e valuta di alzare `--timeout` oltre i 300 secondi di default.
+
+#### Tabella flag
+
 | Flag | Descrizione |
 |------|-------------|
 | `--company URL\|SLUG` | URL LinkedIn o slug dell'azienda (obbligatorio) |
-| `--from YYYY-MM-DD` | Data inizio range (inclusa) |
-| `--to YYYY-MM-DD` | Data fine range (inclusa) |
-| `--max-posts N` | Numero massimo di post da recuperare (default: 0 = tutti) |
-| `--output FILE` | File JSON di output personalizzato |
-| `--timeout SEC` | Timeout massimo di attesa per il run Apify (default: 300 secondi) |
-| `--download-media` | Scarica anche immagini, video e PDF allegati ai post |
+| `--posted-limit WINDOW` | Finestra relativa: `1h`, `24h`, `week`, `month`, `3months`, `6months`, `year`, `any`. Mutuamente esclusivo con `--from`/`--to`. |
+| `--from YYYY-MM-DD` | Data inizio range (inclusa). Da usare con `--to`. |
+| `--to YYYY-MM-DD` | Data fine range (inclusa). Da usare con `--from`. |
+| `--max-posts N` | Numero massimo di post (default: 0 = tutti). Si combina con entrambe le modalità. |
+| `--output FILE` | File JSON di output personalizzato. |
+| `--timeout SEC` | Timeout massimo di attesa per il run Apify (default: 300 secondi). Alzalo per range lunghi nel passato. |
+| `--download-media` | Scarica anche immagini, video e PDF allegati ai post. |
 
-**Nota sul tempo di esecuzione:** Il run Apify può richiedere da 30 secondi a diversi minuti. Durante l'attesa, lo script stampa un punto ogni 10 secondi. Informa l'utente che stai aspettando, soprattutto se il run sembra bloccarsi.
+**Nota sul tempo di esecuzione:** Il run Apify può richiedere da 30 secondi a diversi minuti. Durante l'attesa, lo script stampa un punto ogni 10 secondi. Informa l'utente che stai aspettando.
+
+**Nota sull'output:** Lo script salva nel JSON l'item *completo* restituito dall'actor — testo del post (`content`), autore, engagement (likes, commenti, condivisioni, breakdown reazioni), URL canonico, media. Non c'è bisogno di chiamarlo di nuovo per recuperare campi mancanti: ci sono già tutti. Per la struttura completa vedi `references/apify-actor.md`.
 
 ### 3. Mostra il risultato
 
@@ -98,23 +116,39 @@ Dopo l'esecuzione, riporta all'utente:
 | URL non trovato | Slug azienda errato | Verifica il nome nell'URL LinkedIn |
 | Nessun post trovato | Range di date senza post | Allarga il range o controlla che la pagina sia attiva |
 
-## Esempio di interazione completa
+## Esempi di interazione
 
-**Utente:** "Scarica gli ultimi 10 post di Nome Azienda da LinkedIn"
+**Esempio 1 — ultimi N post:**
 
-**Modello:** (non chiede nulla, parametri già forniti)
-
-**Modello:** "Avvio lo script... (il run Apify può richiedere qualche minuto)"
+> Utente: "Scarica gli ultimi 10 post di Nome Azienda da LinkedIn"
 
 ```bash
 python3 scripts/fetch_posts.py \
   --company "nome-azienda" \
-  --from 2020-01-01 \
-  --to 2026-05-02 \
+  --posted-limit any \
   --max-posts 10
 ```
 
-**Modello:** "10 post salvati in: `/percorso/linkedin_posts_nome-azienda_20260502_143022.json`"
+**Esempio 2 — ultimo mese:**
+
+> Utente: "Voglio i post di Nome Azienda dell'ultimo mese"
+
+```bash
+python3 scripts/fetch_posts.py \
+  --company "nome-azienda" \
+  --posted-limit month
+```
+
+**Esempio 3 — mese specifico nel calendario:**
+
+> Utente: "Prendi i post di Nome Azienda di aprile 2026"
+
+```bash
+python3 scripts/fetch_posts.py \
+  --company "nome-azienda" \
+  --from 2026-04-01 \
+  --to 2026-04-30
+```
 
 ## Riferimenti tecnici
 
