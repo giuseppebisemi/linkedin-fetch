@@ -9,7 +9,7 @@ Questa skill orchestra `fetch_posts.py` per recuperare post da una pagina Linked
 
 Prima di eseguire lo script, verifica che l'ambiente sia pronto:
 
-1. **Dipendenze Python** — Lo script richiede `requests` e `python-dotenv`. Se mancano, installale:
+1. **Dipendenze Python** — Lo script richiede `apify-client` e `python-dotenv`. Se mancano, installale:
    ```bash
    pip install -r scripts/requirements.txt
    ```

@@ -27,9 +27,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
 
 try:
-    import requests
+    from apify_client import ApifyClient
+    from apify_client.errors import ApifyApiError
     from dotenv import load_dotenv
 except ImportError as exc:
     missing = getattr(exc, "name", str(exc).split()[-1])
@@ -40,15 +43,8 @@ except ImportError as exc:
 
 load_dotenv(Path(__file__).parent / ".env")
 
-APIFY_BASE = "https://api.apify.com/v2"
-ACTOR_ID   = "harvestapi~linkedin-company-posts"
+ACTOR_ID = "harvestapi~linkedin-company-posts"
 
-POLL_INTERVAL = 10   # secondi tra un poll e l'altro
-POLL_TIMEOUT  = 300  # secondi massimi di attesa per il run
-
-# Valori accettati dal parametro `postedLimit` dell'actor HarvestAPI.
-# Sono finestre temporali relative valutate lato actor durante lo scroll
-# del feed: "24h" significa "tutti i post pubblicati nelle ultime 24 ore".
 POSTED_LIMIT_CHOICES = ("1h", "24h", "week", "month", "3months", "6months", "year", "any")
 
 
@@ -83,83 +79,40 @@ def parse_iso_date(s: str, *, end_of_day: bool = False) -> datetime:
 
 # ── Apify ─────────────────────────────────────────────────────────────────────
 
-def start_actor_run(
+def run_actor(
+    client: ApifyClient,
     company_url: str,
-    token: str,
     *,
     date_from: datetime | None = None,
     posted_limit: str | None = None,
     max_posts: int = 0,
+    timeout: int = 300,
 ) -> tuple[str, str]:
-    """Avvia il run dell'actor. Restituisce (run_id, dataset_id).
-
-    Esattamente uno tra `date_from` (mappato su `postedLimitDate`) e
-    `posted_limit` (mappato su `postedLimit`) deve essere fornito.
-    """
+    """Avvia il run e attende il completamento. Restituisce (run_id, dataset_id)."""
     body: dict = {"targetUrls": [company_url], "maxPosts": max_posts}
     if date_from is not None:
         body["postedLimitDate"] = date_from.strftime("%Y-%m-%d")
     if posted_limit is not None:
         body["postedLimit"] = posted_limit
 
-    resp = requests.post(
-        f"{APIFY_BASE}/acts/{ACTOR_ID}/runs",
-        params={"token": token},
-        json=body,
-        timeout=30,
-    )
+    run = client.actor(ACTOR_ID).call(run_input=body, timeout_secs=timeout)
 
-    if resp.status_code == 401:
-        print("Errore 401: APIFY_API_TOKEN non valido.")
-        sys.exit(1)
-    elif resp.status_code not in (200, 201):
-        print(f"Errore Apify {resp.status_code}: {resp.text}")
+    if run["status"] != "SUCCEEDED":
+        print(f"\nErrore: run terminato con stato '{run['status']}'.")
+        print(f"Dettagli: https://console.apify.com/actors/runs/{run['id']}")
         sys.exit(1)
 
-    data = resp.json()["data"]
-    return data["id"], data["defaultDatasetId"]
+    return run["id"], run["defaultDatasetId"]
 
 
-def wait_for_run(run_id: str, token: str, timeout: int = POLL_TIMEOUT) -> None:
-    """Polling finché il run non termina."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        resp = requests.get(
-            f"{APIFY_BASE}/actor-runs/{run_id}",
-            params={"token": token},
-            timeout=15,
-        )
-        status = resp.json()["data"]["status"]
-        if status == "SUCCEEDED":
-            return
-        elif status in ("FAILED", "ABORTED", "TIMED-OUT"):
-            print(f"\nErrore: run terminato con stato '{status}'.")
-            print(f"Dettagli: https://console.apify.com/actors/runs/{run_id}")
-            sys.exit(1)
-        print(".", end="", flush=True)
-        time.sleep(POLL_INTERVAL)
-
-    print("\nTimeout: il run Apify non ha completato entro il tempo massimo.")
-    sys.exit(1)
-
-
-def fetch_dataset(dataset_id: str, token: str) -> list[dict]:
-    """Scarica tutti gli item dal dataset Apify."""
-    resp = requests.get(
-        f"{APIFY_BASE}/datasets/{dataset_id}/items",
-        params={"token": token, "limit": 1000},
-        timeout=60,
-    )
-    if resp.status_code != 200:
-        print(f"Errore nel recupero del dataset: {resp.status_code}")
-        sys.exit(1)
-    return resp.json()
+def fetch_dataset(client: ApifyClient, dataset_id: str) -> list[dict]:
+    """Scarica tutti gli item dal dataset, paginando automaticamente."""
+    return list(client.dataset(dataset_id).iterate_items())
 
 
 # ── filtering ─────────────────────────────────────────────────────────────────
 
 def post_date(item: dict) -> datetime | None:
-    """Estrae la data di pubblicazione da un item HarvestAPI."""
     date_str = (item.get("postedAt") or {}).get("date") or ""
     if not date_str:
         return None
@@ -184,9 +137,9 @@ def sort_by_date(items: list[dict]) -> list[dict]:
 
 # ── output ────────────────────────────────────────────────────────────────────
 
-def save_json(posts: list[dict], slug: str) -> Path:
+def save_json(posts: list[dict], slug: str, base_dir: Path) -> Path:
     ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = Path.cwd() / f"linkedin_posts_{slug}_{ts}.json"
+    path = base_dir / f"linkedin_posts_{slug}_{ts}.json"
     path.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 
@@ -210,45 +163,54 @@ def _ext_from_url(url: str) -> str:
 
 def _download_file(url: str, dest: Path) -> bool:
     try:
-        resp = requests.get(url, timeout=60)
-        if resp.status_code == 200:
-            dest.write_bytes(resp.content)
-            return True
-    except Exception:
+        with urlopen(url, timeout=60) as resp:
+            if resp.status == 200:
+                dest.write_bytes(resp.read())
+                return True
+    except (URLError, HTTPError, TimeoutError):
         pass
     return False
 
 
-def download_media(posts: list[dict], slug: str) -> Path:
+def _post_folder_name(post: dict) -> str:
+    """Nome della cartella per un post: YYYYMMDDTHHMMSS_id (es. 20260415T103022_7445786160687169536)"""
+    post_id = str(post.get("id", "unknown"))
+    post_date = (post.get("postedAt") or {}).get("date", "")
+    try:
+        dt = datetime.fromisoformat(post_date.replace("Z", "+00:00"))
+        date_str = dt.strftime("%Y%m%dT%H%M%S")
+    except (ValueError, AttributeError):
+        date_str = "unknown"
+    return f"{date_str}_{post_id}"
+
+
+def download_media(posts: list[dict], slug: str, base_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    media_dir = Path.cwd() / f"linkedin_posts_{slug}_{ts}_media"
+    media_dir = base_dir / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
 
     for post in posts:
-        post_id = str(post.get("id", "unknown"))
-        post_dir = media_dir / post_id
+        post_dir = media_dir / _post_folder_name(post)
         post_dir.mkdir(exist_ok=True)
 
         images = post.get("postImages") or []
         if images:
-            img_dir = post_dir / "images"
-            img_dir.mkdir(exist_ok=True)
-            for idx, url in enumerate(images, 1):
-                ext = _ext_from_url(url) or ".jpg"
-                _download_file(url, img_dir / f"image_{idx:03d}{ext}")
+            for idx, img_obj in enumerate(images, 1):
+                url = img_obj.get("url")
+                if url:
+                    ext = _ext_from_url(url) or ".jpg"
+                    _download_file(url, post_dir / f"image_{idx:03d}{ext}")
 
         video = post.get("postVideo") or {}
         video_url = video.get("videoUrl")
         thumb_url = video.get("thumbnailUrl")
         if video_url or thumb_url:
-            vid_dir = post_dir / "video"
-            vid_dir.mkdir(exist_ok=True)
             if thumb_url:
                 ext = _ext_from_url(thumb_url) or ".jpg"
-                _download_file(thumb_url, vid_dir / f"thumbnail{ext}")
+                _download_file(thumb_url, post_dir / f"thumbnail{ext}")
             if video_url:
                 ext = _ext_from_url(video_url) or ".mp4"
-                _download_file(video_url, vid_dir / f"video{ext}")
+                _download_file(video_url, post_dir / f"video{ext}")
 
         doc = post.get("document") or {}
         doc_url = doc.get("transcribedDocumentUrl")
@@ -257,12 +219,10 @@ def download_media(posts: list[dict], slug: str) -> Path:
         else:
             covers = doc.get("coverPages") or [] if doc else []
             if covers:
-                cov_dir = post_dir / "covers"
-                cov_dir.mkdir(exist_ok=True)
                 for page_idx, page in enumerate(covers, 1):
                     for img_idx, url in enumerate(page.get("imageUrls", []), 1):
                         ext = _ext_from_url(url) or ".jpg"
-                        _download_file(url, cov_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
+                        _download_file(url, post_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
 
     return media_dir
 
@@ -305,7 +265,7 @@ Esempi:
                         help="File JSON di output (default: linkedin_posts_<slug>_<ts>.json nella CWD)")
     parser.add_argument("--max-posts", type=int, default=0, metavar="N",
                         help="Numero massimo di post da recuperare (default: 0 = tutti)")
-    parser.add_argument("--timeout", type=int, default=POLL_TIMEOUT, metavar="SEC",
+    parser.add_argument("--timeout", type=int, default=300, metavar="SEC",
                         help="Timeout massimo di attesa per il run Apify (default: 300)")
     parser.add_argument("--download-media", action="store_true",
                         help="Scarica anche immagini, video e PDF allegati ai post")
@@ -331,30 +291,38 @@ Esempi:
     print("\n── LinkedIn Company Posts Fetcher ──")
 
     company_url, slug = resolve_company(args.company)
-
     token = get_apify_token()
+    client = ApifyClient(token)
+
     print(f"\nAvvio actor Apify per: {company_url}")
     if args.posted_limit:
         print(f"Finestra: postedLimit={args.posted_limit}")
     else:
         print(f"Finestra: {args.date_from} → {args.date_to}")
-    run_id, dataset_id = start_actor_run(
-        company_url,
-        token,
-        date_from=date_from,
-        posted_limit=args.posted_limit,
-        max_posts=args.max_posts,
-    )
-    print(f"Run ID: {run_id} — in attesa", end="", flush=True)
-    wait_for_run(run_id, token, args.timeout)
-    print(" completato.")
+    print("Run avviato, in attesa del completamento (può richiedere alcuni minuti)...")
+
+    try:
+        run_id, dataset_id = run_actor(
+            client,
+            company_url,
+            date_from=date_from,
+            posted_limit=args.posted_limit,
+            max_posts=args.max_posts,
+            timeout=args.timeout,
+        )
+    except ApifyApiError as e:
+        if e.status_code == 401:
+            print("Errore 401: APIFY_API_TOKEN non valido.")
+        else:
+            print(f"Errore Apify {e.status_code}: {e}")
+        sys.exit(1)
+
+    print(f"Run completato (ID: {run_id}).")
 
     print("Recupero dataset...", end=" ", flush=True)
-    raw_items = fetch_dataset(dataset_id, token)
+    raw_items = fetch_dataset(client, dataset_id)
     print(f"{len(raw_items)} post recuperati dall'actor.")
 
-    # Con --from/--to applichiamo lato script il filtro upper-bound (--to),
-    # perché l'actor non lo espone. Con --posted-limit ci fidiamo dell'actor.
     if date_from and date_to:
         posts = filter_posts(raw_items, date_from, date_to)
     else:
@@ -364,16 +332,29 @@ Esempi:
         print("\nNessun post trovato.")
         sys.exit(0)
 
+    # Creazione cartella di output con JSON e media raggruppati
     if args.output:
-        path = Path(args.output)
-        path.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
+        output_path = Path(args.output)
+        if output_path.suffix == ".json":
+            # Se l'output è un file JSON, crea cartella accanto
+            base_dir = output_path.parent / f"{output_path.stem}_media"
+        else:
+            # Se è una directory, usa quella
+            base_dir = output_path
     else:
-        path = save_json(posts, slug)
-    print(f"\n{len(posts)} post salvati in: {path}")
+        # Default: cartella con nome slug
+        base_dir = Path.cwd() / f"linkedin_posts_{slug}"
+
+    # Salva JSON nella cartella
+    json_path = base_dir / f"linkedin_posts_{slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n{len(posts)} post salvati in: {json_path}")
 
     if args.download_media:
-        media_dir = download_media(posts, slug)
+        media_dir = download_media(posts, slug, base_dir)
         print(f"Contenuti multimediali salvati in: {media_dir}")
+        print(f"  Struttura: {media_dir}/<YYYYMMDDTHHMMSS_id>/image_001.jpg, video.mp4, document.pdf, ...")
 
 
 if __name__ == "__main__":
