@@ -69,7 +69,7 @@ else
     # Verifica se il token è configurato
     if ! grep -q "^APIFY_API_TOKEN=[^[:space:]]" .env; then
         echo "⚠️  ATTENZIONE: APIFY_API_TOKEN non configurato in .env"
-        echo "   Per usarare la skill, devi inserire il tuo token:"
+        echo "   Per usare la skill, devi inserire il tuo token:"
         echo "   1. Apri .env con il tuo editor:"
         echo "      vi .env"
         echo "   2. Inserisci il tuo token:"

@@ -104,7 +104,7 @@ I campi sono basati sul sample ufficiale dell'actor.
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| `postImages` | `string[]` | URL delle immagini singole allegate al post. |
+| `postImages` | `object[]` | Array di oggetti `{ "url": "...", "width": N, "height": N }` per ogni immagine allegata. Lo script legge `.url` di ciascun oggetto. |
 | `postVideo` | `object` | `{ "thumbnailUrl": "...", "videoUrl": "..." }` — anteprima e MP4 del video. Presente solo per post video. |
 | `document` | `object` | Documento PDF / carosello LinkedIn: `{ "title": "...", "transcribedDocumentUrl": "...", "coverPages": [{ "width": N, "height": N, "imageUrls": ["..."] }], "totalPageCount": N }`. Lo script scarica `transcribedDocumentUrl` se presente; altrimenti le immagini delle `coverPages`. |
 

@@ -157,7 +157,7 @@ def main():
                     print("✅ Token trovato in .env (inizializzato)")
         else:
             print("❌ APIFY_API_TOKEN non configurato")
-            print("   Esegui: source scripts/setup.sh")
+            print("   Esegui: bash scripts/setup.sh")
             success = False
     else:
         if not args.quiet:

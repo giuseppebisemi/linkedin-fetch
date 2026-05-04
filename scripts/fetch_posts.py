@@ -135,15 +135,6 @@ def sort_by_date(items: list[dict]) -> list[dict]:
     return sorted(items, key=lambda item: (item.get("postedAt") or {}).get("date") or "")
 
 
-# ── output ────────────────────────────────────────────────────────────────────
-
-def save_json(posts: list[dict], slug: str, base_dir: Path) -> Path:
-    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = base_dir / f"linkedin_posts_{slug}_{ts}.json"
-    path.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
-    return path
-
-
 # ── media download ────────────────────────────────────────────────────────────
 
 def _ext_from_url(url: str) -> str:
@@ -184,47 +175,52 @@ def _post_folder_name(post: dict) -> str:
     return f"{date_str}_{post_id}"
 
 
-def download_media(posts: list[dict], slug: str, base_dir: Path) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+def download_media(posts: list[dict], slug: str, base_dir: Path) -> tuple[Path, int, int]:
+    """Scarica i media di tutti i post. Restituisce (media_dir, ok, fail)."""
     media_dir = base_dir / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
+    ok = fail = 0
+
+    def _try(url: str, dest: Path) -> None:
+        nonlocal ok, fail
+        if _download_file(url, dest):
+            ok += 1
+        else:
+            fail += 1
 
     for post in posts:
         post_dir = media_dir / _post_folder_name(post)
         post_dir.mkdir(exist_ok=True)
 
         images = post.get("postImages") or []
-        if images:
-            for idx, img_obj in enumerate(images, 1):
-                url = img_obj.get("url")
-                if url:
-                    ext = _ext_from_url(url) or ".jpg"
-                    _download_file(url, post_dir / f"image_{idx:03d}{ext}")
+        for idx, img_obj in enumerate(images, 1):
+            url = img_obj.get("url")
+            if url:
+                ext = _ext_from_url(url) or ".jpg"
+                _try(url, post_dir / f"image_{idx:03d}{ext}")
 
         video = post.get("postVideo") or {}
-        video_url = video.get("videoUrl")
         thumb_url = video.get("thumbnailUrl")
-        if video_url or thumb_url:
-            if thumb_url:
-                ext = _ext_from_url(thumb_url) or ".jpg"
-                _download_file(thumb_url, post_dir / f"thumbnail{ext}")
-            if video_url:
-                ext = _ext_from_url(video_url) or ".mp4"
-                _download_file(video_url, post_dir / f"video{ext}")
+        video_url = video.get("videoUrl")
+        if thumb_url:
+            ext = _ext_from_url(thumb_url) or ".jpg"
+            _try(thumb_url, post_dir / f"thumbnail{ext}")
+        if video_url:
+            ext = _ext_from_url(video_url) or ".mp4"
+            _try(video_url, post_dir / f"video{ext}")
 
         doc = post.get("document") or {}
         doc_url = doc.get("transcribedDocumentUrl")
         if doc_url:
-            _download_file(doc_url, post_dir / "document.pdf")
+            _try(doc_url, post_dir / "document.pdf")
         else:
-            covers = doc.get("coverPages") or [] if doc else []
-            if covers:
-                for page_idx, page in enumerate(covers, 1):
-                    for img_idx, url in enumerate(page.get("imageUrls", []), 1):
-                        ext = _ext_from_url(url) or ".jpg"
-                        _download_file(url, post_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
+            covers = doc.get("coverPages") or []
+            for page_idx, page in enumerate(covers, 1):
+                for img_idx, url in enumerate(page.get("imageUrls", []), 1):
+                    ext = _ext_from_url(url) or ".jpg"
+                    _try(url, post_dir / f"cover_{page_idx:03d}_{img_idx:03d}{ext}")
 
-    return media_dir
+    return media_dir, ok, fail
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -352,9 +348,13 @@ Esempi:
     print(f"\n{len(posts)} post salvati in: {json_path}")
 
     if args.download_media:
-        media_dir = download_media(posts, slug, base_dir)
-        print(f"Contenuti multimediali salvati in: {media_dir}")
-        print(f"  Struttura: {media_dir}/<YYYYMMDDTHHMMSS_id>/image_001.jpg, video.mp4, document.pdf, ...")
+        media_dir, ok, fail = download_media(posts, slug, base_dir)
+        total = ok + fail
+        if total == 0:
+            print("Nessun media allegato ai post.")
+        else:
+            print(f"Media scaricati in: {media_dir} ({ok}/{total} ok, {fail} falliti)")
+            print(f"  Struttura: {media_dir}/<YYYYMMDDTHHMMSS_id>/image_001.jpg, video.mp4, document.pdf, ...")
 
 
 if __name__ == "__main__":

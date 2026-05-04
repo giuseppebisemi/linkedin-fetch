@@ -28,7 +28,7 @@ except ImportError as exc:
 
 load_dotenv(Path(__file__).parent / ".env")
 
-SEARCH_ACTOR_ID = "harvestapi/linkedin-company-search"
+SEARCH_ACTOR_ID = "harvestapi~linkedin-company-search"
 
 
 def get_token() -> str:

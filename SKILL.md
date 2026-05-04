@@ -11,7 +11,7 @@ Prima di eseguire lo script, prepara l'ambiente:
 
 1. **Installa dipendenze** — Usa lo script di setup:
    ```bash
-   python3 scripts/setup.sh
+   bash scripts/setup.sh
    ```
    Oppure installa manualmente:
    ```bash
@@ -89,6 +89,7 @@ Valori accettati: `1h`, `24h`, `week`, `month`, `3months`, `6months`, `year`, `a
 
 | Richiesta utente | Modalità da usare |
 |------------------|-------------------|
+| "ultima ora", "ultimi 60 minuti" | `--posted-limit 1h` |
 | "ultime 24 ore", "oggi", "ieri" | `--posted-limit 24h` |
 | "questa settimana", "ultimi 7 giorni" | `--posted-limit week` |
 | "ultimo mese", "ultimi 30 giorni" | `--posted-limit month` |
@@ -153,7 +154,7 @@ Dopo l'esecuzione, riporta all'utente:
 
 | Scenario | Causa | Azione |
 |----------|-------|--------|
-| Errore: dipendenza Python mancante | `apify-client` o `python-dotenv` non installati | Esegui `python3 scripts/setup.sh` |
+| Errore: dipendenza Python mancante | `apify-client` o `python-dotenv` non installati | Esegui `bash scripts/setup.sh` |
 | Errore: APIFY_API_TOKEN non trovato | Token non configurato | Guida l'utente a crearlo su https://console.apify.com/account/integrations e a scriverlo in `scripts/.env` |
 | Errore 401 Apify | `APIFY_API_TOKEN` non valido | Verifica che il token sia corretto e non scaduto |
 | RUN FAILED / TIMED-OUT | Apify non è riuscito a completare lo scraping | Controlla i log su `https://console.apify.com/actors/runs/<run_id>` |

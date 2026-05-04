@@ -18,9 +18,9 @@ Una skill per Claude Code che recupera post da pagine LinkedIn aziendali tramite
 
 ## Installazione
 
-1. Clona o copia questa skill nella tua directory di skill di Claude Code:
+1. Clona la skill nella directory `~/.claude/skills/` di Claude Code:
    ```bash
-   git clone https://github.com/giuseppebisemi/linkedin-fetch.git
+   git clone https://github.com/giuseppebisemi/linkedin-fetch.git ~/.claude/skills/linkedin-fetch
    ```
 
 2. Installa le dipendenze Python:
@@ -42,7 +42,7 @@ Una skill per Claude Code che recupera post da pagine LinkedIn aziendali tramite
 Esegui lo script di setup per installare le dipendenze e configurare l'ambiente:
 
 ```bash
-python3 scripts/setup.sh
+bash scripts/setup.sh
 ```
 
 Questo script:
@@ -59,6 +59,33 @@ python3 scripts/test.py
 ```
 
 ## Utilizzo
+
+### Invocazione naturale via `/linkedin-fetch` (modo consigliato)
+
+Una volta installata in `~/.claude/skills/linkedin-fetch/`, la skill è disponibile in Claude Code come slash command. Lanciala scrivendo `/linkedin-fetch` seguito dalla richiesta in linguaggio naturale: Claude interpreta la richiesta, sceglie i flag corretti ed esegue lo script per te.
+
+Claude estrae automaticamente:
+
+- **L'azienda** — nome commerciale o URL LinkedIn. Se lo slug LinkedIn non coincide col nome (es. Anthropic → `anthropicresearch`), Claude esegue `scripts/search_company.py` (actor `harvestapi/linkedin-company-search`) e usa i risultati — `name`, `employeeCount`, `followerCount`, `locations`, `description` — per convergere allo slug giusto. Se ci sono più match, ti mostra le opzioni e chiede conferma prima del fetch.
+- **La finestra temporale** — espressioni come "ultime 24h", "ultimo mese", "aprile 2026", "dal 1 al 15 marzo" vengono mappate sul flag corretto: `--posted-limit` per finestre relative native dell'actor (più veloce), `--from` / `--to` per range di calendario espliciti.
+- **Modificatori** — frasi come "con i media", "con immagini", "scarica i video" aggiungono `--download-media`.
+
+Esempi:
+
+```
+/linkedin-fetch ultimi 10 post di Anthropic
+→ search_company.py risolve "anthropic" → "anthropicresearch"
+→ python3 scripts/fetch_posts.py --company anthropicresearch --posted-limit any --max-posts 10
+
+/linkedin-fetch post di LYBRA dell'ultimo mese
+→ search_company.py ritorna 3 match (lybra-consulting, lybra-tech, lybra-destination)
+→ Claude chiede quale; poi esegue fetch_posts.py --company <scelto> --posted-limit month
+
+/linkedin-fetch post di Microsoft di aprile 2026 con immagini
+→ python3 scripts/fetch_posts.py --company microsoft --from 2026-04-01 --to 2026-04-30 --download-media
+```
+
+La sezione successiva descrive l'invocazione diretta dello script Python (utile per scripting, automazioni, o quando si vuole bypassare l'interpretazione di Claude).
 
 ### Finestra relativa (più veloce)
 
@@ -122,8 +149,8 @@ linkedin-fetch/
 
 | Errore | Soluzione |
 |--------|-----------|
-| Dipendenza mancante (`apify-client`, `python-dotenv`) | Esegui `python3 scripts/setup.sh` |
-| APIFY_API_TOKEN non trovato | Usa `python3 scripts/setup.sh` e compila `.env`, oppure esporta il token |
+| Dipendenza mancante (`apify-client`, `python-dotenv`) | Esegui `bash scripts/setup.sh` |
+| APIFY_API_TOKEN non trovato | Usa `bash scripts/setup.sh` e compila `.env`, oppure esporta il token |
 | 401 da Apify | Verifica che il token sia valido e non scaduto |
 | Timeout del run | Aumenta `--timeout` o controlla i log su console Apify |
 | Errore: specifica --from...oppure --posted-limit | Usa `--posted-limit any` se vuoi tutti i post o specifica un range con `--from`/`--to` |
