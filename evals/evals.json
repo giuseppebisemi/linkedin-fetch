@@ -1,0 +1,47 @@
+{
+  "skill_name": "linkedin-fetch",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "ultimi-5-post-azienda",
+      "prompt": "Recupera gli ultimi 5 post di Google da LinkedIn",
+      "expected_output": "Lo script esegue fetch_posts.py con --company google --posted-limit any --max-posts 5 e genera un file JSON con 5 post.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "eval_name": "post-ultimo-mese-azienda",
+      "prompt": "Voglio i post di Microsoft dell'ultimo mese",
+      "expected_output": "Lo script esegue fetch_posts.py con --company microsoft --posted-limit month e genera un file JSON con i post del mese scorso.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "eval_name": "post-range-date-specifiche",
+      "prompt": "Prendi i post di Apple di aprile 2026",
+      "expected_output": "Lo script esegue fetch_posts.py con --company apple --from 2026-04-01 --to 2026-04-30 e genera un file JSON filtrato per il mese di aprile.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "eval_name": "post-24h-con-media",
+      "prompt": "Scarica gli ultimi 24 ore di post di Netflix con le immagini",
+      "expected_output": "Lo script esegue fetch_posts.py con --company netflix --posted-limit 24h --download-media e scarica i post con i media allegati.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "eval_name": "url-completo-vs-slug",
+      "prompt": "Fai fetch di https://www.linkedin.com/company/spotify/ negli ultimi 7 giorni",
+      "expected_output": "Lo script estrae lo slug 'spotify' dall'URL e esegue fetch_posts.py con --company spotify --posted-limit week.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "eval_name": "slug-non-ovvio",
+      "prompt": "Recupera gli ultimi 3 post di Anthropic da LinkedIn",
+      "expected_output": "Lo script usa lo slug corretto 'anthropicresearch' (non 'anthropic') e lo passa a --company. Verifica che l'agente consulti la tabella slug nella SKILL.md.",
+      "files": []
+    }
+  ]
+}

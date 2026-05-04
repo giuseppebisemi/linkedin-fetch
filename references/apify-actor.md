@@ -14,7 +14,7 @@ L'actor accetta molti parametri (vedi [schema completo](https://apify.com/harves
 
 | Parametro actor | Flag CLI | Tipo | Descrizione |
 |-----------------|----------|------|-------------|
-| `targetUrls` | `--company` (mappato) | `string[]` | URL LinkedIn della company. Lo script accetta uno slug o un URL e costruisce sempre `https://www.linkedin.com/company/<slug>/`. |
+| `targetUrls` | `--company` (mappato) | `string[]` | URL LinkedIn della company. Lo script accetta uno **slug** (es. `google`, `anthropicresearch`) o un **URL completo**. Se passi lo slug, lo script costruisce automaticamente `https://www.linkedin.com/company/<slug>/`. **Attenzione:** lo slug LinkedIn potrebbe non coincidere col nome commerciale (es. `google` va bene, ma per Anthropic devi usare `anthropicresearch`, non `anthropic`). |
 | `postedLimitDate` | `--from` | `string` | Data **limite inferiore**. L'actor scrolla il feed dal post più recente a ritroso e si ferma quando incontra un post antecedente a questa data. Formato `YYYY-MM-DD`. |
 | `postedLimit` | `--posted-limit` | `string` | Finestra **temporale relativa** valutata lato actor durante lo scroll. Valori: `1h`, `24h`, `week`, `month`, `3months`, `6months`, `year`, `any`. |
 | `maxPosts` | `--max-posts` | `number` | Massimo per URL. `0` = tutti. **Default actor: 10** (lo script lo forza a 0 se non specificato). |
